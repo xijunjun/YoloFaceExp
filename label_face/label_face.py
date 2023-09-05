@@ -10,7 +10,8 @@ import math
 
 ############路径及窗口大小设置############################
 # local_path = u"Z:\workspace\yoloface\dataset\crawler"          #图像根目录
-local_path=r'Z:\workspace\yoloface\dataset\label_test'
+# local_path=r'Z:\workspace\yoloface\dataset\label_test'
+local_path=r'Z:\workspace\yoloface\dataset\crawler'
 
 MAX_WIDTH=1800                    #图像窗口最大宽度
 MAX_HEIGHT=1000                    #图像窗口最大高度
@@ -341,10 +342,9 @@ def parse_path(filepath):
     return filekey,ext,path_noext
 
 def imgpath_to_txtpath(imgpath):
-    filekey,ext,path_noext=parse_path(im)
+    filekey,ext,path_noext=parse_path(imgpath)
     txtpath=path_noext+'.txt'
     return txtpath
-
 
 def xyxy2xywh(x):
     # Convert nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] where xy1=top-left, xy2=bottom-right
@@ -406,6 +406,8 @@ def load_ano_from_txt(txtpath,w,h):
         facerect[:,1]*=h
         faceland[:,0]*=w
         faceland[:,1]*=h
+
+        print(facerect)
 
         face_label_list_loaded.append((list(facerect.astype(np.int32)),list(faceland.astype(np.int32))))
     return face_label_list_loaded
