@@ -74,10 +74,11 @@ def imgpath_to_txtpath(imgpath):
     return txtpath
 
 def detect():
-    # weights=r'.\weights\yolov7s-face.pt'
-    weights=r'.\weights\yolov7-w6-face.pt'
+    weights=r'.\weights\yolov7s-face.pt'
+    # weights=r'.\weights\yolov7-w6-face.pt'
 
-    source=r'Z:\workspace\yoloface\dataset\crawler'
+    # source=r'Z:\workspace\yoloface\dataset\crawler'
+    source=r'Z:\workspace\yoloface\dataset\MAFA\MAFA1000'
     kpt_label=5
     imgsz=640
     conf_thres=0.25
@@ -154,7 +155,8 @@ def detect():
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
                 # Write results
-                for det_index, (*xyxy, conf, cls) in enumerate(reversed(det[:,:6])):
+                # for det_index, (*xyxy, conf, cls) in enumerate(reversed(det[:,:6])):
+                for det_index, (*xyxy, conf, cls) in enumerate(det[:,:6]):
                     xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                     # kpts = det[det_index, 6:]
                     num_array=det[det_index,:].cpu().numpy()
