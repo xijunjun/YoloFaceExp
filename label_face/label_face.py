@@ -19,12 +19,16 @@ MAX_HEIGHT=1000                    #图像窗口最大高度
 ########################################
 
 global_facerctpts_label=[]
-global_facerctpts_label_offset=[]
+# global_extra_offset=[0,0]
 global_facelandpts_label=[]
 global_flags=[0,0,0,0,0] 
+global_prev_stats=[-1,-1,-1,-1]
 #cursor_rect,cursor_land,curstate,
 # 方框的光标，关键点的光标，当前窗口处于哪个阶段。
 global_face_label_list=[]
+
+# global_edge_center_list=[[0,0],[0,0],[0,0],[0,0]]
+
 #
 
 local_path=local_path+'/'
@@ -115,6 +119,15 @@ def get_ims(imgpath):
                 imgpathlst.append(os.path.join(imgpath, dirpath, filename))
     return imgpathlst
 
+def get_dirims(imroot):
+    imgpathlst=[]
+
+    filenames=os.listdir(imroot)
+    for filename in filenames:
+        if os.path.splitext(filename)[1] in ['.jpg','.jpeg','.png']:
+            imgpathlst.append(os.path.join(imroot,filename))
+    return imgpathlst
+
 def find_nearest_point_index(x, y, pts_label_all):
     min_distance = float('inf')  # 初始化一个无限大的距离
     nearest_index = None
@@ -164,6 +177,14 @@ def find_nearest_rct_index(x, y, face_label_list):
 
     return nearest_index
 
+def draw_cross(image,pt,line_color,line_length,line_thickness):
+    
+    center_x, center_y=pt
+    # 绘制水平线
+    cv2.line(image, (center_x - line_length, center_y), (center_x + line_length, center_y), line_color, line_thickness)
+    # 绘制垂直线
+    cv2.line(image, (center_x, center_y - line_length), (center_x, center_y + line_length), line_color, line_thickness)
+
 
 
 def update_view_main():
@@ -177,6 +198,17 @@ def update_view_main():
     linethick_scale_ratio=cac_winratio(disimg,MAX_WIDTH,MAX_HEIGHT)
     # print('linethick_scale_ratio:',linethick_scale_ratio)
     line_ratio_mul=1/linethick_scale_ratio
+
+
+    h,w,c=disimg.shape
+
+
+    # edge_center_list=[np.array([w//2,0]),np.array([w,h//2]),np.array([w//2,h]),np.array([0,h//2])]
+    # cross_cursor_ind=global_flags[3]
+    # for i,pt in enumerate(edge_center_list):
+    #     draw_cross(disimg,tuple(pt),(0, 0, 255),int(2*circle_r_offset+circle_r_base*line_ratio_mul+0.5),int(2*rectline_thick_base*line_ratio_mul+0.5))
+    # draw_cross(disimg,tuple(edge_center_list[cross_cursor_ind]),(0, 255, 0),int(2*circle_r_offset+circle_r_base*line_ratio_mul+0.5),int(2*rectline_thick_base*line_ratio_mul+0.5))
+
 
     for pt in global_facerctpts_label:
         cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+circle_r_base*line_ratio_mul+0.5), (0, 0, 255), thickness=-1)
@@ -206,6 +238,8 @@ def update_view_main():
             cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 0, 255), int(rectline_thick_base*line_ratio_mul+0.5))
 
         rect_cursor=global_flags[0]
+        # print(rect_cursor)
+
         rect_label,faceland_label=global_face_label_list[rect_cursor]
         tl,br=rect_label[0],rect_label[1]  
         cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 255, 0), int(rectline_thick_base*line_ratio_mul+0.5))
@@ -279,8 +313,19 @@ def update_view_facecrop():
     cv2.imshow('refine_face',disimg)
     resize_facecrop_window(disimg,'refine_face')
 
+def find_closest_point(edge_center_list, pt):
+    # 计算每个点与 pt 之间的距离
+    distances = np.linalg.norm(edge_center_list - pt, axis=1)
+    # 找到最小距离的索引
+    closest_index = np.argmin(distances)
+    return closest_index
+
 
 def mouse_func_facerect(event,x,y,flags,param):
+    global global_facerctpts_label
+    global global_facelandpts_label
+    global global_face_label_list
+
     # if len(global_facerctpts_label) == 2:
     #     return
     # global_flags
@@ -301,11 +346,43 @@ def mouse_func_facerect(event,x,y,flags,param):
         update_view_main()
         cv2.waitKey(1)#注意此处等待按键
 
+
+
+    if event == cv2.EVENT_RBUTTONDOWN:
+        # print('cv2.EVENT_RBUTTONDOWN')
+        if len(global_face_label_list)>0:
+            rect_cursor=global_flags[0]
+            rect_label,faceland_label=global_face_label_list[rect_cursor]
+
+            tl,br=rect_label[0],rect_label[1]  
+            croprct=get_facecrop_rect(img,tl,br)
+            tlx,tly,brx,bry=croprct[0][0],croprct[0][1],croprct[1][0],croprct[1][1]
+            faceland_label=np.array(faceland_label)
+            faceland_label[:,0]-=tlx
+            faceland_label[:,1]-=tly
+            # print(faceland_label)
+
+            global_facerctpts_label=list(rect_label)
+            # print('global_facerctpts_label:',global_facerctpts_label)
+            global_facelandpts_label=list(faceland_label)
+            del global_face_label_list[rect_cursor]
+            global_flags[0]=0
+            refine_face()
+
     if event == cv2.EVENT_MOUSEMOVE:
+
+        edge_center_list=np.array([np.array([w//2,0]),np.array([w,h//2]),np.array([w//2,h]),np.array([0,h//2])])
+        cross_cursor_ind=find_closest_point(edge_center_list, [x, y])
+        global_flags[3]=cross_cursor_ind
         global_flags[0]=find_nearest_rct_index(x, y, global_face_label_list)
         update_view_main()
-        cv2.waitKey(1)#注意此处等待按键
+        
+        # if global_prev_stats[0]!=global_flags[0]:
+        #     update_view_main()
+        #     global_prev_stats[0]=global_flags[0]
+        # cv2.waitKey(1)#注意此处等待按键
 
+        
 
 def mouse_func_faceland(event,x,y,flags,param):
     global global_facecroped
@@ -330,6 +407,8 @@ def mouse_func_faceland(event,x,y,flags,param):
         update_view_facecrop()
         cv2.waitKey(1)#注意此处等待按键
 
+
+
     if event == cv2.EVENT_MOUSEMOVE:
         pts_label_all=list(global_facerctpts_label)
         pts_label_all.extend(global_facelandpts_label)
@@ -338,8 +417,10 @@ def mouse_func_faceland(event,x,y,flags,param):
         global_flags[1]=find_nearest_point_index(x, y, pts_label_all)
         
         update_view_facecrop()
-        cv2.waitKey(1)#注意此处等待按键
+        # cv2.waitKey(1)#注意此处等待按键
 
+    # if event == cv2.EVENT_RBUTTONDOWN:
+    #     global_flags[4]=1
 
 # 
 
@@ -474,21 +555,32 @@ def load_ano_from_txt(txtpath,w,h):
         faceland[:,0]*=w
         faceland[:,1]*=h
 
-        print(facerect)
+        # print(facerect)
 
         face_label_list_loaded.append((list(facerect.astype(np.int32)),list(faceland.astype(np.int32))))
 
         # break
     return face_label_list_loaded
 
-
+def makedir(filedir):
+    if os.path.exists(filedir) is False:
+        os.mkdir(filedir)
 
 if __name__ == '__main__':
     # global global_face_label_list
 
 
-    ims=get_ims(local_path)
+    # ims=get_ims(local_path)
+    ims=get_dirims(local_path)
     ims.sort()
+
+
+    easy_root=os.path.join(local_path,'refine')
+    hard_root=os.path.join(local_path,'notuse')
+
+    makedir(easy_root)
+    makedir(hard_root)
+
 
     cv2.namedWindow('img', cv2.WINDOW_FREERATIO)
     cv2.setMouseCallback('img', mouse_func_facerect)
@@ -497,20 +589,26 @@ if __name__ == '__main__':
         # if i==0:
         #     continue
         print(im)
-
+        img=cv2.imread(im)
+        filekey,ext,path_noext=parse_path(im)
+        txt_path=imgpath_to_txtpath(im)
+        imname=os.path.basename(im)
+        txtname=os.path.basename(txt_path)
 
         global_facelandpts_label.clear()
         global_facerctpts_label.clear()
 
 
-        img=cv2.imread(im)
+        # img=cv2.imread(im)
         h,w,c=img.shape
 
         cv2.imshow('img',img)
         limit_window(img,'img')
 
         txt_path=imgpath_to_txtpath(im)
+        HasLabel=False
         if os.path.exists(txt_path):
+            HasLabel=True
             face_label_list_loaded=load_ano_from_txt(txt_path,w,h)
             global_face_label_list=face_label_list_loaded.copy()
             update_view_main()
@@ -525,15 +623,35 @@ if __name__ == '__main__':
                 ano_lines=make_facenao_lines()
 
                 txt_path=imgpath_to_txtpath(im)
+                # if HasLabel:
+                #     print('keep label?',global_face_label_list==face_label_list_loaded)
+
                 with open(txt_path,'w') as f:
                     f.writelines(ano_lines)
                 print(ano_lines)
 
+                global_flags[0]=0
+                global_flags[1]=0
+                global_flags[2]=0
 
+                shutil.move(im,os.path.join(easy_root,imname))
+                if os.path.exists(txt_path):
+                    shutil.move(txt_path,os.path.join(easy_root,txtname))
+                break
+
+            if key ==ord('1'):
+                shutil.move(im,os.path.join(hard_root,imname))
+                if os.path.exists(txt_path):
+                    shutil.move(txt_path,os.path.join(hard_root,txtname))
+
+                global_face_label_list.clear()
+                global_facelandpts_label.clear()
+                global_facerctpts_label.clear()
                 global_flags[0]=0
                 global_flags[1]=0
                 global_flags[2]=0
                 break
+
             if key in key_dic['BACK']:
                 if len(global_facerctpts_label)>0:
                     global_facerctpts_label.pop()
@@ -557,13 +675,12 @@ if __name__ == '__main__':
                     faceland_label=np.array(faceland_label)
                     faceland_label[:,0]-=tlx
                     faceland_label[:,1]-=tly
-                    print(faceland_label)
+                    # print(faceland_label)
 
                     global_facerctpts_label=rect_label
                     global_facelandpts_label=list(faceland_label)
                     del global_face_label_list[rect_cursor]
                     global_flags[0]=0
-
                     refine_face()
 
                 print('space')
