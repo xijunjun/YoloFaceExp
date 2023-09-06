@@ -11,7 +11,8 @@ import math
 ############路径及窗口大小设置############################
 # local_path = u"Z:\workspace\yoloface\dataset\crawler"          #图像根目录
 # local_path=r'Z:\workspace\yoloface\dataset\label_test'
-local_path=r'Z:\workspace\yoloface\dataset\crawler'
+# local_path=r'Z:\workspace\yoloface\dataset\crawler'
+local_path=r'Z:\workspace\yoloface\dataset\MAFA\MAFA1000'
 
 MAX_WIDTH=1800                    #图像窗口最大宽度
 MAX_HEIGHT=1000                    #图像窗口最大高度
@@ -49,6 +50,31 @@ def limit_imgw(img):
     if  img.shape[0]>360:
         img=cv2.resize( img,(int(360.0/img.shape[0]*img.shape[1]),360),interpolation=cv2.INTER_CUBIC )
     return  img
+
+
+def cac_winratio(disimg,_MAX_WIDTH,_MAX_HEIGHT ):
+    wm_ratio=1.0
+    if disimg.shape[1] > _MAX_WIDTH or disimg.shape[0] > _MAX_HEIGHT:
+        if (disimg.shape[1] / float(disimg.shape[0])) > (_MAX_WIDTH / float(_MAX_HEIGHT)):
+            # cv2.resizeWindow(winname, MAX_WIDTH, int(MAX_WIDTH / float(disimg.shape[1]) * disimg.shape[0]))
+            wm_ratio = _MAX_WIDTH / float(disimg.shape[1])
+        else:
+            # cv2.resizeWindow(winname, int(MAX_HEIGHT / float(disimg.shape[0]) * disimg.shape[1]), MAX_HEIGHT)
+            wm_ratio = _MAX_HEIGHT / float(disimg.shape[0])
+    
+    return wm_ratio
+
+def cac_winratio_force(disimg,_MAX_WIDTH,_MAX_HEIGHT ):
+    wm_ratio=1.0
+    # if disimg.shape[1] > _MAX_WIDTH or disimg.shape[0] > _MAX_HEIGHT:
+    if (disimg.shape[1] / float(disimg.shape[0])) > (_MAX_WIDTH / float(_MAX_HEIGHT)):
+        # cv2.resizeWindow(winname, MAX_WIDTH, int(MAX_WIDTH / float(disimg.shape[1]) * disimg.shape[0]))
+        wm_ratio = _MAX_WIDTH / float(disimg.shape[1])
+    else:
+        # cv2.resizeWindow(winname, int(MAX_HEIGHT / float(disimg.shape[0]) * disimg.shape[1]), MAX_HEIGHT)
+        wm_ratio = _MAX_HEIGHT / float(disimg.shape[0])
+    
+    return wm_ratio
 
 
 def limit_window(disimg,winname):
@@ -141,9 +167,19 @@ def find_nearest_rct_index(x, y, face_label_list):
 
 
 def update_view_main():
+
+    rectline_thick_base=2.0
+    circle_r_base=3.0
+    circle_r_offset=2.0
+    # rectline_thick_base
+
     disimg=np.array(img)
+    linethick_scale_ratio=cac_winratio(disimg,MAX_WIDTH,MAX_HEIGHT)
+    # print('linethick_scale_ratio:',linethick_scale_ratio)
+    line_ratio_mul=1/linethick_scale_ratio
+
     for pt in global_facerctpts_label:
-        cv2.circle(disimg, (pt[0], pt[1]),int(2), (0, 0, 255), thickness=-1)
+        cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+circle_r_base*line_ratio_mul+0.5), (0, 0, 255), thickness=-1)
 
     if len(global_facerctpts_label)==2:
         # rect_cursor_ind=global_flags[0]
@@ -152,7 +188,7 @@ def update_view_main():
 
         tl=global_facerctpts_label[0]
         br=global_facerctpts_label[1]   
-        cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 0, 255), 1)
+        cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 0, 255), int(rectline_thick_base*line_ratio_mul+0.5))
         
         bigrct=get_facecrop_rect(disimg,tl,br)
         tl=bigrct[0]
@@ -163,16 +199,19 @@ def update_view_main():
         for face_label in global_face_label_list:
             rect_label,faceland_label=face_label
             for pt in faceland_label:
-                cv2.circle(disimg, (pt[0], pt[1]),int(3), (255, 0, 255), thickness=-1)
+                cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+circle_r_base*line_ratio_mul+0.5), (0, 0, 255), thickness=-1)
 
             tl=rect_label[0]
             br=rect_label[1]   
-            cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 0, 255), 1)
+            cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 0, 255), int(rectline_thick_base*line_ratio_mul+0.5))
 
         rect_cursor=global_flags[0]
         rect_label,faceland_label=global_face_label_list[rect_cursor]
         tl,br=rect_label[0],rect_label[1]  
-        cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 0, 255), 3)
+        cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 255, 0), int(rectline_thick_base*line_ratio_mul+0.5))
+
+        for pt in faceland_label:
+            cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+circle_r_base*line_ratio_mul+0.5), (0, 255, 0), thickness=-1)
 
 
     cv2.imshow('img', disimg)
@@ -187,26 +226,54 @@ def update_view_facecrop():
     # tlx,tly,brx,bry=croprct[0][0],croprct[0][1],croprct[1][0],croprct[1][1]
     # facecroped=img[tly:bry+1,tlx:brx+1,:].copy()
 
+    colors = [(0, 0, 255),  # 红色 (B, G, R)
+            (0, 165, 255),  # 橙色
+            (0, 255, 255),  # 黄色
+            (0, 255, 0),  # 绿色
+            (255, 0, 0),  # 蓝色
+            (255, 255, 0),  # 青色
+            (128, 0, 128)]  # 紫色
+
     disimg=np.array(global_facecroped)
+
+
+    TARGET_WIDTH=800
+    TARGET_HEIGHT=800
+    rectline_thick_base=1.5
+    circle_r_base=4.0
+    circle_r_offset=3.0
+    string_base=1.0
+    fontbase=0.4
+
+    # rectline_thick_base
+    linethick_scale_ratio=cac_winratio_force(disimg,TARGET_WIDTH,TARGET_HEIGHT)
+    # print('linethick_scale_ratio:',linethick_scale_ratio)
+    line_ratio_mul=1/linethick_scale_ratio
 
     tl=global_facerctpts_label[0]
     br=global_facerctpts_label[1]   
-    cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 0, 255), 1)
+    cv2.rectangle(disimg,(tl[0],tl[1]),(br[0],br[1]), (0, 0, 255), int(rectline_thick_base*line_ratio_mul+0.5))
     for pt in global_facerctpts_label:
-        cv2.circle(disimg, (pt[0], pt[1]),int(2), (0, 0, 255), thickness=-1)
+        cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+circle_r_base*line_ratio_mul+0.5), (0, 0, 255), thickness=-1)
 
 
-    for pt in global_facelandpts_label:
-        cv2.circle(disimg, (pt[0], pt[1]),int(2), (0, 0, 255), thickness=-1)
+    for i,pt in enumerate(global_facelandpts_label):
+        # cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_base*line_ratio_mul+0.5), (0, 0, 255), thickness=-1)
+        cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+circle_r_base*line_ratio_mul+0.5), colors[i], thickness=-1)
+        # cv2.putText(disimg, str(i), (pt[0], pt[1]),cv2.FONT_HERSHEY_SIMPLEX, fontbase*line_ratio_mul, (0, 0, 255), int(string_base*line_ratio_mul+0.5), cv2.LINE_AA)
 
     pt_cursor=global_flags[1]
     if len(global_facelandpts_label)==5:
         if pt_cursor>=2:
             pt=global_facelandpts_label[pt_cursor-2]
-            cv2.circle(disimg, (pt[0], pt[1]),int(4), (0, 0, 255), thickness=-1)
+            # cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_base*line_ratio_mul+0.5), (0, 255, 0), thickness=-1)
+            cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+1.5*circle_r_base*line_ratio_mul+0.5), colors[pt_cursor-2], thickness=-1)
+            cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+1.5*circle_r_base*line_ratio_mul+0.5), colors[-1], thickness=int(1.5*line_ratio_mul+0.5))
+            # cv2.putText(disimg, str(pt_cursor-2), (pt[0], pt[1]), cv2.FONT_HERSHEY_SIMPLEX, fontbase*line_ratio_mul, (0, 255, 0), int(string_base*line_ratio_mul+0.5), cv2.LINE_AA)
         else:
             pt=global_facerctpts_label[pt_cursor]
-            cv2.circle(disimg, (pt[0], pt[1]),int(4), (0, 0, 255), thickness=-1)
+            cv2.circle(disimg, (pt[0], pt[1]),int(circle_r_offset+1.5*circle_r_base*line_ratio_mul+0.5), (0, 255, 0), thickness=-1)
+            
 
 
     cv2.imshow('refine_face',disimg)
@@ -410,6 +477,8 @@ def load_ano_from_txt(txtpath,w,h):
         print(facerect)
 
         face_label_list_loaded.append((list(facerect.astype(np.int32)),list(faceland.astype(np.int32))))
+
+        # break
     return face_label_list_loaded
 
 
@@ -445,9 +514,6 @@ if __name__ == '__main__':
             face_label_list_loaded=load_ano_from_txt(txt_path,w,h)
             global_face_label_list=face_label_list_loaded.copy()
             update_view_main()
-
-
-
 
 
         while 1:
@@ -491,6 +557,7 @@ if __name__ == '__main__':
                     faceland_label=np.array(faceland_label)
                     faceland_label[:,0]-=tlx
                     faceland_label[:,1]-=tly
+                    print(faceland_label)
 
                     global_facerctpts_label=rect_label
                     global_facelandpts_label=list(faceland_label)
