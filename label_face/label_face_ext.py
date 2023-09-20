@@ -28,11 +28,16 @@ global_prev_stats=[-1,-1,-1,-1]
 #cursor_rect,cursor_land,curstate,
 # 方框的光标，关键点的光标，当前窗口处于哪个阶段。
 global_face_label_list=[]
+# global_face_label_list_origin=[]
+
+
 # global_edge_center_list=[[0,0],[0,0],[0,0],[0,0]]
 
 
 global_extend_lenth_list=[0,0,0,0]
 global_img_info=[0,0,0,0] #img,h,w,c
+global_offset=[0,0]
+
 img=None
 
 
@@ -230,11 +235,11 @@ def update_view_main():
     h,w,c=disimg.shape
 
 
-    # edge_center_list=[np.array([w//2,0]),np.array([w,h//2]),np.array([w//2,h]),np.array([0,h//2])]
-    # cross_cursor_ind=global_flags[3]
-    # for i,pt in enumerate(edge_center_list):
-    #     draw_cross(disimg,tuple(pt),(0, 0, 255),int(2*circle_r_offset+circle_r_base*line_ratio_mul+0.5),int(2*rectline_thick_base*line_ratio_mul+0.5))
-    # draw_cross(disimg,tuple(edge_center_list[cross_cursor_ind]),(0, 255, 0),int(2*circle_r_offset+circle_r_base*line_ratio_mul+0.5),int(2*rectline_thick_base*line_ratio_mul+0.5))
+    edge_center_list=[np.array([w//2,0]),np.array([w,h//2]),np.array([w//2,h]),np.array([0,h//2])]
+    cross_cursor_ind=global_flags[3]
+    for i,pt in enumerate(edge_center_list):
+        draw_cross(disimg,tuple(pt),(0, 0, 255),int(2*circle_r_offset+circle_r_base*line_ratio_mul+0.5),int(2*rectline_thick_base*line_ratio_mul+0.5))
+    draw_cross(disimg,tuple(edge_center_list[cross_cursor_ind]),(0, 255, 0),int(2*circle_r_offset+circle_r_base*line_ratio_mul+0.5),int(2*rectline_thick_base*line_ratio_mul+0.5))
 
 
     for pt in global_facerctpts_label:
@@ -542,13 +547,24 @@ def xywh2xyxy(x):
 
 
 def make_facenao_lines():
-    h,w,c=img.shape
+    oriimg,oh,ow,oc=tuple(global_img_info)
+    offsetx=global_offset[0]
+    offsety=global_offset[1]
+
+    h,w,c=oriimg.shape
     lines=''
     for face_label in global_face_label_list:
         line='0 '
         rect_label,faceland_label=face_label
 
         rect_label_xywh=np.array(rect_label)
+        faceland_label=np.array(faceland_label)
+        # 调整偏移量
+        rect_label_xywh[:,0]-=offsetx
+        rect_label_xywh[:,1]-=offsety
+        faceland_label[:,0]-=offsetx
+        faceland_label[:,1]-=offsety
+
         rect_label_xywh=xyxy2xywh(rect_label_xywh)
         for pt in rect_label_xywh:
             line+=str(float(pt[0])/w)+' '+str(float(pt[1])/h)+' '
@@ -619,6 +635,56 @@ def makedir(filedir):
 def update_extend():
     if len(global_face_label_list)<=0:
         return 
+    offsetxf,offsetyf=0,0
+    global img
+    ptsall=[]
+    oriimg,oh,ow,oc=tuple(global_img_info)
+    if len(global_face_label_list)>0:
+        for face_label in global_face_label_list:
+            rect_label,faceland_label=face_label
+            rect_label_np=np.array(rect_label,np.float32)
+            faceland_label_np=np.array(faceland_label,np.float32)
+            rect_label_np[:,0]/=ow
+            rect_label_np[:,1]/=oh
+            faceland_label_np[:,0]/=ow
+            faceland_label_np[:,1]/=oh
+            ptsall.append(np.concatenate((rect_label_np,faceland_label_np),axis=0))
+
+    offsetxf=global_extend_lenth_list[0]
+    offsetyf=global_extend_lenth_list[1]
+
+    extw=int((1+global_extend_lenth_list[0]+global_extend_lenth_list[2])*w)
+    exth=int((1+global_extend_lenth_list[1]+global_extend_lenth_list[3])*h)
+
+    newimg=np.zeros((exth,extw,3),img.dtype)
+    # print(offsety,offsety+h,offsetx,offsetx+w)
+    # exit(0)
+    offsety=int(oh*offsetyf)
+    offsetx=int(ow*offsetxf)
+
+
+
+    newimg[offsety:offsety+h,offsetx:offsetx+w,:]=oriimg.copy()
+    img=newimg
+    
+    if len(global_face_label_list)>0:
+        for i,face_label in enumerate(global_face_label_list):
+            rect_label,faceland_label=face_label
+            rect_label=np.array(rect_label)
+            faceland_label=np.array(faceland_label)
+            rect_label[:,0]+=offsetx-global_offset[0]
+            rect_label[:,1]+=offsety-global_offset[1]
+
+            faceland_label[:,0]+=offsetx-global_offset[0]
+            faceland_label[:,1]+=offsety-global_offset[1]
+            global_face_label_list[i]=(list(rect_label),list(faceland_label))
+    global_offset[0]=offsetx
+    global_offset[1]=offsety
+
+
+def update_extend_load():
+    if len(global_face_label_list)<=0:
+        return 
     
     offsetxf,offsetyf=0,0
 
@@ -673,6 +739,9 @@ def update_extend():
 
     newimg[offsety:offsety+h,offsetx:offsetx+w,:]=oriimg.copy()
     img=newimg
+
+    # print('global_offset:',global_offset)
+
     
     if len(global_face_label_list)>0:
         for i,face_label in enumerate(global_face_label_list):
@@ -686,6 +755,26 @@ def update_extend():
             faceland_label[:,1]+=offsety
 
             global_face_label_list[i]=(list(rect_label),list(faceland_label))
+
+
+    global_offset[0]=offsetx
+    global_offset[1]=offsety
+
+
+def global_reset():
+
+    global_face_label_list.clear()
+    global_facelandpts_label.clear()
+    global_facerctpts_label.clear()
+    for i,_ in enumerate(global_offset):
+        global_offset[i]=0
+    for i,_ in enumerate(global_extend_lenth_list):
+        global_extend_lenth_list[i]=0
+    for i,_ in enumerate(global_flags):
+        global_flags[i]=0
+        
+    
+
 
 
 if __name__ == '__main__':
@@ -739,7 +828,7 @@ if __name__ == '__main__':
             HasLabel=True
             face_label_list_loaded=load_ano_from_txt(txt_path,w,h)
             global_face_label_list=face_label_list_loaded.copy()
-            update_extend()
+            update_extend_load()
             update_view_main()
 
 
@@ -759,13 +848,11 @@ if __name__ == '__main__':
                     f.writelines(ano_lines)
                 print(ano_lines)
 
-                global_flags[0]=0
-                global_flags[1]=0
-                global_flags[2]=0
-
                 shutil.move(im,os.path.join(easy_root,imname))
                 if os.path.exists(txt_path):
                     shutil.move(txt_path,os.path.join(easy_root,txtname))
+
+                global_reset()
                 break
 
             if key ==ord('1'):
@@ -773,13 +860,29 @@ if __name__ == '__main__':
                 if os.path.exists(txt_path):
                     shutil.move(txt_path,os.path.join(hard_root,txtname))
 
-                global_face_label_list.clear()
-                global_facelandpts_label.clear()
-                global_facerctpts_label.clear()
+                global_reset()
+
                 global_flags[0]=0
                 global_flags[1]=0
                 global_flags[2]=0
                 break
+
+            if key ==ord('2'):
+                cross_cursor_ind=global_flags[3]
+                print('cross_cursor_ind:',cross_cursor_ind)
+                global_extend_lenth_list[(1+cross_cursor_ind)%4]+=0.2
+                update_extend()
+                update_view_main()
+                pass
+            if key ==ord('3'):
+                cross_cursor_ind=global_flags[3]
+                print('cross_cursor_ind:',cross_cursor_ind)
+                global_extend_lenth_list[(1+cross_cursor_ind)%4]-=0.2
+                update_extend()
+                update_view_main()
+                pass
+
+
 
             if key in key_dic['BACK']:
                 if len(global_facerctpts_label)>0:
